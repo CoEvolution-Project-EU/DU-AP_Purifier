@@ -1,5 +1,4 @@
 # DU-AP_Purifier
-# DU-AP_Purifier
 
 **DU-AP_Purifier** is a defence tool developed within the **CoEvolution Hub** for improving the robustness of LiDAR-based semantic segmentation systems against adversarial attacks.
 

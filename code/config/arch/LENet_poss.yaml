@@ -1,0 +1,169 @@
+################################################################################
+# training parameters
+################################################################################
+train:
+  pipeline: "LENet"      # model name 
+  loss: "xentropy"       # must be either xentropy or iou
+  max_epochs: 60
+  batch_size: 1          # batch size
+  report_batch: 10       # every x batches, report loss
+  report_epoch: 1        # every x epochs, report validation set
+  epsilon_w: 0.001       # class weight w = 1 / (content + epsilon_w)
+  save_summary: False    # Summary of weight histograms for tensorboard
+  save_scans: False      # False doesn't save anything, True saves some sample images 
+                         # (one per batch of the last calculated batch) in log folder
+  show_scans: False      # show scans during training
+  workers: 12             # number of threads to get data
+
+  syncbn: True           # sync batchnorm
+  act: SiLU              # act layer, LeakyReLU, SiLU, Hardswish, GELU
+
+  optimizer: "adam"  # sgd or adam
+
+  scheduler: "consine"  # "consine" or "warmup"
+  consine:
+    min_lr: 0.00001
+    max_lr: 0.00100
+    first_cycle: 30
+    cycle: 1
+    wup_epochs: 1
+    gamma: 1.0
+  warmup:
+    lr: 0.01             # learning rate
+    wup_epochs: 1        # warmup during first XX epochs (can be float)
+    lr_decay: 0.99       # learning rate decay per epoch after initial cycle (from min lr)
+    momentum: 0.9        # sgd momentum
+
+  adversarial:
+    attack_type: pgd # pgd     # pgd (white-box) | square (black-box)
+    norm: linf #l2
+    eps: 0.5
+    steps: 15
+    # step_size: 0.2 # eps/steps
+    square_queries: 500 #1000
+    square_restarts: 1
+    square_p_init: 0.4
+    square_valid_threshold: 0.0
+    square_sparse_rows_only: false
+    square_output_type: probs  # probs | logits
+    square_seed: 0
+    square_verbose: false
+    max_eval_samples: 100
+    # clip_min: 0.0
+    # clip_max: 1.0
+    eval_attack: true
+    pretrained_mode: finetune   # finetune | resume
+    pretrained_ckpt: LENet_valid_best
+    ##################
+    generated_adv_root: /mnt/hdd_old/home/mips/Workspace/RangeSeg-main/offline_adv/poss_linf_0_3
+    # generated_adv_root: /home/mips/Workspace/RangeSeg-main/offline_adv/poss_linf_0_5
+    ####### WAVELET_DENOISE_RANGE
+    use_wavelet_range_denoise: false
+    wavelet_range_wavelet: db2
+    wavelet_range_level: 1
+    wavelet_range_sigma_n: 0.03
+    wavelet_range_threshold_mode: bayes # bayes # soft
+    wavelet_range_invalid_value: -1.0
+    wavelet_range_normalize_valid: true
+    wavelet_range_norm_min: 0.0
+    wavelet_range_norm_max: 200.0
+    
+    ####### LIGHTWEIGHT PURIFICATION METHODS==================
+    use_range_quantization: true ## Range Quantization
+    range_quant_levels: 90
+
+    use_range_median_filter: false ## Median Filtering only
+    range_median_ksize: 2
+
+    use_range_bilateral_filter: false
+    range_bilateral_d: 5
+    range_bilateral_sigma_color: 0.18
+    range_bilateral_sigma_space: 4.0
+    range_bilateral_normalize_valid: true
+
+    use_range_down_up_filter: false #downsample-upsample
+    range_down_up_scale: 0.5
+    range_down_up_mode: bilinear
+
+    use_range_gaussian_filter: false
+    range_gaussian_ksize: 3
+    range_gaussian_sigma: 1.0
+    range_gaussian_normalize_valid: true
+    #########=========== ADAPTIVE ATTACK=====================
+    attack_through_sr: false
+    attack_bpda_identity: true  
+
+  aux_loss:
+    use: True
+    lamda: [0.5, 1.0, 1.0]
+
+  sr_denoiser:
+    type: du_yolop_wavelet         # du | du_wavelet | du_wavelet_torch | du_yolop_wavelet
+    blocks: 3
+    # blocks: 1
+    pretrained_path: "/mnt/hdd_old/home/mips/Workspace/RangeSeg-main/logs_poss_sr_advtrain_guided_yolop_style/2026-3-05-13:56/model_SR.pth"
+    #"/home/mips/Workspace/RangeSeg-main/logs_poss_sr_advtrain_guided_yolop_style/2026-3-05-08:48/model_SR.pth" #"/home/mips/Workspace/RangeSeg-main/logs_poss_sr_advtrain_guided_yolop_style/2026-3-04-20:12/model_SR.pth" #"/home/mips/Workspace/RangeSeg-main/logs_poss_sr_advtrain_yolop_wavelet/2026-3-03-13:07/model_SR.pth"
+    # absolute path to model_SR.pth (optional)
+    cnn_layers: [1, 1, 1, 1]
+    cnn_channels: [8, 16, 32] # [16, 32, 64]
+    wavelet: db2 #db1
+    wavelet_level: 1
+    sigma_n: 0.03 #0.04
+    use_bayes_shrink: true
+    use_gradient_prior: true
+    # grad_kernel: 5
+  
+  # for mos
+  residual: False # This needs to be the same as in the dataset params below!
+  n_input_scans: 1 # This needs to be the same as in the dataset params below!
+
+################################################################################
+# postproc parameters
+################################################################################
+post:
+  CRF:
+    use: False
+    train: True
+    params: False # this should be a dict when in use
+  KNN:
+    use: True # This parameter default is false
+    params:
+      knn: 7
+      search: 7
+      sigma: 1.0
+      cutoff: 2.0
+
+################################################################################
+# classification head parameters
+################################################################################
+# dataset (to find parser)
+dataset:
+  labels: "poss"
+  scans: "poss"
+  max_points: 32768 # max of any scan in dataset
+  sensor:
+    name: "Pandora"
+    type: "spherical" # projective
+    fov_up: 7
+    fov_down: -16
+    img_prop:
+      width: 1024
+      height: 40
+    img_means: #range,x,y,z,signal   (40, 1800)
+      - 22.26779
+      - 0.51144063
+      - 1.5727469
+      - -0.6350901
+      - 13.875261
+    img_stds: #range,x,y,z,signal
+      - 17.735949
+      - 17.422485
+      - 22.217215
+      - 1.6433295
+      - 14.0925865
+      
+    # for mos
+    n_input_scans: 1  # This needs to be the same as in the backbone params above!
+    residual: False # This needs to be the same as in the backbone params above!
+    transform: False  # tranform the last n_input_scans - 1 frames before concatenation
+    use_normal: False # if use normal vector as channels of range image
